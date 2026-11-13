@@ -1,0 +1,14 @@
+[project]
+name = "261113-python-advanced"
+version = "0.1.0"
+description = "Add your description here"
+readme = "README.md"
+requires-python = ">=3.14"
+dependencies = [
+    "fastapi[standard]>=0.162.5",
+]
+
+[dependency-groups]
+dev = [
+    "pytest>=9.2.0",
+]
