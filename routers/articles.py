@@ -1,9 +1,10 @@
 # routers/articles.py
-from fastapi import APIRouter, Path, Query, HTTPException
+from fastapi import APIRouter, Path, Query, HTTPException, Depends
 from typing import Optional, List
 from schemas.articles import ArticleResponse, ArticleCreation, ArticleMiseAJour
 from datetime import datetime
 from exceptions import ArticleNonTrouveException
+from auth import UtilisateurDansToken, get_current_user
 
 # ------------------------------------> tags qui servent à tout
 router = APIRouter(prefix="/articles", tags=["Articles"])
@@ -102,8 +103,19 @@ def update_article(article_id: int, article: ArticleMiseAJour):
 
 
 @router.delete("/{article_id}", status_code=204)
-def delete_article(article_id: int = Path(gt=0)):
+def delete_article(
+    article_id: int = Path(gt=0),
+    # une dépendance créé par l'utilisateur mais intégrée à FastAPI via Depends()
+    user: UtilisateurDansToken = Depends(get_current_user)
+):
     """Supprime l'article ou retourne 404."""
-    if article_id not in articles_db:
+    print(user.username)
+    articles = list(filter(lambda d: d["id"] == article_id, articles_db))
+    if not articles:
         raise HTTPException(status_code=404, detail=f"Article {article_id} introuvable")
-    del articles_db[article_id]
+    for i in range(len(articles_db)):
+        if articles[0]["id"] == articles_db[i]["id"]:
+            del articles_db[i]
+            break
+
+# curl -X DELETE "http://127.0.0.1:8000/articles/1" -H "Authorization: Bearer <token>"

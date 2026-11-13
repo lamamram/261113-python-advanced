@@ -1,7 +1,7 @@
 # main.py
 from fastapi import FastAPI, Request
 # -- optimisation de fastapi pour importer un module depuis un package
-from routers import articles
+from routers import articles, auth
 from exceptions import ArticleNonTrouveException
 from fastapi.responses import JSONResponse
 
@@ -30,3 +30,4 @@ def read_root():
     return {"message": "Bienvenue sur l'API Catalogue"}
 
 app.include_router(articles.router)
+app.include_router(auth.router)
