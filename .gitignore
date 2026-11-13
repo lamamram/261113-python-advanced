@@ -1,0 +1,16 @@
+.ipynb_checkpoints/
+.venv/
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+workdir/
+log.txt
+data.*
+*.db
+dns_*.csv
+*.zip
+2025*.csv
+data/
+*.ui
+Ui_*.py
