@@ -1,7 +1,8 @@
 # routers/articles.py
-from fastapi import APIRouter, Path, Query
+from fastapi import APIRouter, Path, Query, HTTPException
 from typing import Optional, List
-from schemas.articles import ArticleResponse
+from schemas.articles import ArticleResponse, ArticleCreation, ArticleMiseAJour
+from datetime import datetime
 
 # ------------------------------------> tags qui servent à tout
 router = APIRouter(prefix="/articles", tags=["Articles"])
@@ -20,6 +21,17 @@ articles_db: list[dict] = [
 
 ]
 
+# --- Base de données simulée ---
+
+_compteur_id = 0
+articles_db: dict[int, dict] = {}
+
+def _nouvel_id() -> int:
+    global _compteur_id
+    _compteur_id += 1
+    return _compteur_id
+
+
 #  /articles/
 @router.get("/", response_model=List[ArticleResponse])
 def list_articles(
@@ -28,19 +40,11 @@ def list_articles(
     # ------->   : str | None
     categorie: Optional[str] = None,
 ):
-    """
-    GET /articles → page=1, taille=10
-
-    GET /articles?page=2&taille=5 → page=2, taille=5
-    
-    GET /articles?categorie=python → filtre par catégorie
-    """
-    return {
-        "page": page,
-        "taille": taille,
-        "categorie": categorie,
-        "articles": [],
-    }
+    """Liste les articles avec pagination et filtre optionnel par catégorie."""
+    if categorie:
+        articles = [a for a in articles_db if a.get("categorie") == categorie]
+    debut = (page - 1) * taille
+    return articles_db [debut : debut + taille] if not categorie else  articles[debut : debut + taille]
 
 # /articles/{article_id}
 # --------------------------> Schéma == Contrat != model au sens MVC !
@@ -48,4 +52,42 @@ def list_articles(
 @router.get("/{article_id}", response_model=ArticleResponse)
 # --------------------------------> contraintes de paramètre de chemin + documentation openapi
 def get_article(article_id: int = Path(gt=0, description="Identifiant entier positif de l'article")):
+    if article_id not in articles_db:
+        raise HTTPException(status_code=404, detail=f"Article {article_id} introuvable")
     return articles_db[article_id - 1]
+
+# ----------------------------------------------> status
+@router.post("/", response_model=ArticleResponse, status_code=201)
+def create_article(article: ArticleCreation):
+    """Crée un nouvel article et retourne l'article créé avec son ID."""
+    nouvel_id = _nouvel_id()
+    nouvel_article = {
+        "id": nouvel_id,
+        # injecter les champs de la requête POST dûment validés par le schéma Pydantic en paramètre du handler
+        **article.model_dump(),
+        "publie": False,
+        "date_creation": datetime.now()
+,
+    }
+    articles_db[nouvel_id] = nouvel_article
+    return nouvel_article
+
+# curl -X POST "http://127.0.0.1:8000/articles/" -H "Content-Type: application/json" -d '{"titre": "Nouvel article", "contenu": "Contenu de l article", "categorie": "python"}'
+
+@router.patch("/{article_id}", response_model=ArticleResponse)
+def update_article(article_id: int, article: ArticleMiseAJour):
+    """Met à jour partiellement l'article (PATCH = modification partielle)."""
+    if article_id not in articles_db:
+        raise HTTPException(status_code=404, detail=f"Article {article_id} introuvable")
+    # ------------------------------> élaguer les champs inutilisés (None) avant la mise à jour
+    mises_a_jour = article.model_dump(exclude_none=True)  # Ignore les champs None
+    articles_db[article_id].update(mises_a_jour)
+    return articles_db[article_id]
+
+
+@router.delete("/{article_id}", status_code=204)
+def delete_article(article_id: int = Path(gt=0)):
+    """Supprime l'article ou retourne 404."""
+    if article_id not in articles_db:
+        raise HTTPException(status_code=404, detail=f"Article {article_id} introuvable")
+    del articles_db[article_id]
