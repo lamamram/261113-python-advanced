@@ -58,7 +58,22 @@ def get_article(article_id: int = Path(gt=0, description="Identifiant entier pos
     return articles_db[article_id - 1]
 
 # ----------------------------------------------> status
-@router.post("/", response_model=ArticleResponse, status_code=201)
+@router.post(
+    "/",
+    response_model=ArticleResponse,
+    status_code=201,
+    summary="Créer un article",
+    description="""
+Crée un nouvel article dans la base de données.
+
+L'identifiant est généré automatiquement côté serveur.
+La date de création est définie au moment de la requête.
+""",
+    response_description="L'article créé avec son identifiant et sa date de création",
+    responses={
+        409: {"description": "Un article avec ce titre existe déjà"},
+    },
+)
 def create_article(article: ArticleCreation):
     """Crée un nouvel article et retourne l'article créé avec son ID."""
     nouvel_id = _nouvel_id()
