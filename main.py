@@ -1,5 +1,8 @@
 # main.py
 from fastapi import FastAPI
+# -- optimisation de fastapi pour importer un module depuis un package
+from routers import articles
+
 
 app = FastAPI(
     title="API Catalogue",
@@ -13,8 +16,4 @@ def read_root():
     """Point d'entrée de l'API — retourne un message de bienvenue."""
     return {"message": "Bienvenue sur l'API Catalogue"}
 
-
-@app.get("/articles/{article_id}")
-def get_article(article_id: int):
-    """Retourne un article fictif identifié par son ID entier."""
-    return {"id": article_id, "titre": f"Article numéro {article_id}"}
+app.include_router(articles.router)
