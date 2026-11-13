@@ -23,5 +23,8 @@ uv add --prod "hypercorn[...]"
 
 ## bonne pratique: ne pas activer le .venv manuellement, laisser uv gérer l'environnement virtuel
 uv run fastapi dev
+## run génère ou maj le fichier uv.lock automatiquement pour verrouiller les versions des dépendances
+## vérification des dépendances installées et de leur compatibilité
+uv check
 
 ```
