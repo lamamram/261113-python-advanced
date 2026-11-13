@@ -3,6 +3,7 @@ from fastapi import APIRouter, Path, Query, HTTPException
 from typing import Optional, List
 from schemas.articles import ArticleResponse, ArticleCreation, ArticleMiseAJour
 from datetime import datetime
+from exceptions import ArticleNonTrouveException
 
 # ------------------------------------> tags qui servent à tout
 router = APIRouter(prefix="/articles", tags=["Articles"])
@@ -11,14 +12,13 @@ router = APIRouter(prefix="/articles", tags=["Articles"])
 articles_db: list[dict] = [
     {"id": 1, "titre": "Intro FastAPI", "contenu": "...", "publie": True,
      "date_creation": "2024-01-15T10:00:00", "nb_vues": 150, "categorie": "python",
-     "mot_de_passe_interne": "ne_pas_exposer"},
+     "mot_de_passe_interne": "ne_pas_exposer", "slug": "intro-fastapi"},
     {"id": 2, "titre": "Avancé FastAPI", "contenu": "...", "publie": False, 
      "date_creation": "2024-01-20T15:00:00", "nb_vues": 75, "categorie": "python",
-     "mot_de_passe_interne": "ne_pas_exposer"},
+     "mot_de_passe_interne": "ne_pas_exposer", "slug": "avance-fastapi"},
     {"id": 3, "titre": "FastAPI et SQLAlchemy", "contenu": "...", "publie": True,
      "date_creation": "2024-02-01T12:00:00", "nb_vues": 200, "categorie": "orm",
-     "mot_de_passe_interne": "ne_pas_exposer"}
-
+     "mot_de_passe_interne": "ne_pas_exposer", "slug": "fastapi-et-sqlalchemy"}
 ]
 
 # --- Base de données simulée ---
@@ -53,7 +53,8 @@ def list_articles(
 # --------------------------------> contraintes de paramètre de chemin + documentation openapi
 def get_article(article_id: int = Path(gt=0, description="Identifiant entier positif de l'article")):
     if article_id not in articles_db:
-        raise HTTPException(status_code=404, detail=f"Article {article_id} introuvable")
+        # redirige la réponse vers le gestionnaire d'exception ad hoc cf main.py
+        raise ArticleNonTrouveException(article_id=article_id)
     return articles_db[article_id - 1]
 
 # ----------------------------------------------> status
