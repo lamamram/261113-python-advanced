@@ -28,9 +28,9 @@ uv run fastapi dev
 ## vérification des dépendances installées et de leur compatibilité à partir du fichier uv.lock
 uv check
 
-## lancement alternatif avec uvicorn
+## lancement alternatif avec uvicorn sur toutes les interfaces
 ```powershell
-uv run uvicorn main:app --reload
+uv run uvicorn main:app --reload --host 0.0.0.0
 ```
 
 ```
