@@ -496,7 +496,7 @@ class ArticleCreation(BaseModel):
     categorie: Optional[str] = None
 
 # Modèle pour la MODIFICATION partielle (entrée) — tous les champs optionnels
-class ArticleMiseAJour(BaseModel):
+class ArticleUpdate(BaseModel):
     titre: Optional[str] = Field(default=None, min_length=3, max_length=200)
     contenu: Optional[str] = Field(default=None, min_length=10)
     categorie: Optional[str] = None
@@ -633,12 +633,12 @@ from fastapi.responses import JSONResponse
 
 app = FastAPI()
 
-class ArticleNonTrouveException(Exception):
+class ArticleNotFoundException(Exception):
     def __init__(self, article_id: int):
         self.article_id = article_id
 
-@app.exception_handler(ArticleNonTrouveException)
-async def article_not_found_handler(request: Request, exc: ArticleNonTrouveException):
+@app.exception_handler(ArticleNotFoundException)
+async def article_not_found_handler(request: Request, exc: ArticleNotFoundException):
     return JSONResponse(
         status_code=404,
         content={
@@ -651,7 +651,7 @@ async def article_not_found_handler(request: Request, exc: ArticleNonTrouveExcep
 @app.get(&quot;/articles/{article_id}&quot;)
 def get_article(article_id: int):
     if article_id not in articles_db:
-        raise ArticleNonTrouveException(article_id=article_id)
+        raise ArticleNotFoundException(article_id=article_id)
     return articles_db[article_id]
 </code></pre><button class="copy-btn" onclick="copyCode(this)">Copier</button></div>
 <p>Ce mécanisme permet de centraliser le format des erreurs de l'API et d'assurer leur cohérence sans dupliquer le code de formatage dans chaque gestionnaire.</p>
@@ -676,7 +676,7 @@ class ArticleCreation(BaseModel):
     contenu: str = Field(min_length=10)
     categorie: Optional[str] = None
 
-class ArticleMiseAJour(BaseModel):
+class ArticleUpdate(BaseModel):
     titre: Optional[str] = Field(default=None, min_length=3, max_length=200)
     contenu: Optional[str] = Field(default=None, min_length=10)
     categorie: Optional[str] = None
@@ -750,7 +750,7 @@ def replace_article(article_id: int, article: ArticleCreation):
 
 
 @router.patch(&quot;/{article_id}&quot;, response_model=ArticleReponse)
-def update_article(article_id: int, article: ArticleMiseAJour):
+def update_article(article_id: int, article: ArticleUpdate):
     &quot;&quot;&quot;Met à jour partiellement l'article (PATCH = modification partielle).&quot;&quot;&quot;
     if article_id not in articles_db:
         raise HTTPException(status_code=404, detail=f&quot;Article {article_id} introuvable&quot;)
@@ -854,25 +854,19 @@ app = FastAPI(lifespan=lifespan)
 from typing import Optional
 import re
 
-class ArticleCreation(BaseModel):
-    titre: str = Field(min_length=3, max_length=200)
-    slug: Optional[str] = None
-    contenu: str = Field(min_length=10)
-    tags: list[str] = Field(default_factory=list)
+class ArticleFormatMixin(BaseModel):
+    """
+    Mixin pour formater les tags en minuscules et sans espaces superflus.
 
-    @field_validator(&quot;slug&quot;)
-    @classmethod
-    def slug_format_valide(cls, v: Optional[str]) -&gt; Optional[str]:
-        &quot;&quot;&quot;Le slug ne peut contenir que des lettres minuscules, chiffres et tirets.&quot;&quot;&quot;
-        if v is not None and not re.match(r&quot;^[a-z0-9-]+$&quot;, v):
-            raise ValueError(&quot;Le slug ne peut contenir que des caractères a-z, 0-9 et -&quot;)
-        return v
-
-    @field_validator(&quot;tags&quot;)
+    check_fields=False permet de valider même si le champ n'est pas défini dans le modèle.
+    """
+    @field_validator(&quot;tags&quot;, check_fields=False)
     @classmethod
     def tags_en_minuscules(cls, v: list[str]) -&gt; list[str]:
         return [tag.lower().strip() for tag in v]
 
+
+class ArticleCreation(ArticleFormatMixin):
     @model_validator(mode=&quot;after&quot;)
     def generer_slug_si_absent(self) -&gt; &quot;ArticleCreation&quot;:
         &quot;&quot;&quot;Génère automatiquement un slug depuis le titre si non fourni.&quot;&quot;&quot;
@@ -1020,7 +1014,7 @@ class TacheCreation(BaseModel):
     terminee: bool = False
     priorite: int = Field(default=3, ge=1, le=5)
 
-class TacheMiseAJour(BaseModel):
+class TacheUpdate(BaseModel):
     titre: Optional[str] = Field(default=None, min_length=3, max_length=100)
     description: Optional[str] = None
     terminee: Optional[bool] = None
@@ -1036,7 +1030,7 @@ class TacheReponse(BaseModel):
 </code></pre><button class="copy-btn" onclick="copyCode(this)">Copier</button></div>
 <p><strong>Étape 3 — Écrire le routeur (<code>routers/taches.py</code>)</strong></p>
 <div class="code-block"><pre><code class="language-python">from fastapi import APIRouter, HTTPException, Path, Query
-from schemas.tache import TacheCreation, TacheMiseAJour, TacheReponse
+from schemas.tache import TacheCreation, TacheUpdate, TacheReponse
 from datetime import datetime
 from typing import Optional, List
 
@@ -1081,7 +1075,7 @@ def get_tache(tache_id: int = Path(gt=0)):
 
 
 @router.patch(&quot;/{tache_id}&quot;, response_model=TacheReponse)
-def update_tache(tache_id: int, tache: TacheMiseAJour):
+def update_tache(tache_id: int, tache: TacheUpdate):
     if tache_id not in taches_db:
         raise HTTPException(status_code=404, detail=f&quot;Tâche {tache_id} introuvable&quot;)
     maj = tache.model_dump(exclude_none=True)

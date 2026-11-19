@@ -3,10 +3,22 @@ from datetime import datetime
 from typing import Optional, List
 import re
 
-class ArticleResponse(BaseModel):
+class ArticleFormatMixin(BaseModel):
+    """
+    Mixin pour formater les tags en minuscules et sans espaces superflus.
+
+    check_fields=False permet de valider même si le champ n'est pas défini dans le modèle.
+    """
+    @field_validator("tags", check_fields=False)
+    @classmethod
+    def tags_en_minuscules(cls, v: list[str]) -> list[str]:
+        """ transformation impossible avec un champs composite depuis Field !!! """
+        return [tag.nom.lower().strip() for tag in v]
+
+class ArticleResponse(ArticleFormatMixin):
     id: int
     titre: str
-    slug: Optional[str] = None
+    slug: Optional[str] = Field(default=None, pattern="^[a-z0-9-]+$", example="mon-article")
     contenu: str
     publie: bool = False
     date_creation: datetime
@@ -15,15 +27,9 @@ class ArticleResponse(BaseModel):
     # liste de tags possiblemement vide par défaut
     tags: List[TagSchema] = Field(default_factory=list)
 
-    @field_validator("tags")
-    @classmethod
-    def tags_en_minuscules(cls, v: list[str]) -> list[str]:
-        """ transformation impossible avec un champs composite depuis Field !!! """
-        return [tag.nom.lower().strip() for tag in v]
 
 
-
-class ArticleCreation(BaseModel):
+class ArticleCreation(ArticleFormatMixin):
     titre: str = Field(min_length=3, max_length=200)
     slug: Optional[str] = None
     # ----------------------------------> validation sur le champs via un attribut simple
@@ -41,10 +47,11 @@ class ArticleCreation(BaseModel):
         return self
 
 # Modèle pour la MODIFICATION partielle (entrée) — tous les champs optionnels
-class ArticleMiseAJour(BaseModel):
+class ArticleUpdate(ArticleFormatMixin):
     titre: Optional[str] = Field(default=None, min_length=3, max_length=200)
     contenu: Optional[str] = Field(default=None, min_length=10)
     categorie: Optional[str] = None
+    tags: Optional[List[TagSchema]] = None
 
 class TagSchema(BaseModel):
     id: int

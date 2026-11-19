@@ -1,10 +1,10 @@
 # routers/articles.py
 from fastapi import APIRouter, Path, Query, HTTPException, Depends
 from typing import Optional, List
-from schemas.articles import ArticleResponse, ArticleCreation, ArticleMiseAJour
+from schemas.articles import ArticleResponse, ArticleCreation, ArticleUpdate
 from datetime import datetime
-from exceptions import ArticleNonTrouveException
-from auth import UtilisateurDansToken, get_current_user
+from exceptions import ArticleNotFoundException
+from auth import UserInToken, get_current_user
 
 # ------------------------------------> tags qui servent à tout
 router = APIRouter(prefix="/articles", tags=["Articles"])
@@ -22,15 +22,21 @@ articles_db: list[dict] = [
      "mot_de_passe_interne": "ne_pas_exposer", "slug": "fastapi-et-sqlalchemy"}
 ]
 
-# --- Base de données simulée ---
-
-_compteur_id = 0
-articles_db: dict[int, dict] = {}
+_compteur_id = len(articles_db)
 
 def _nouvel_id() -> int:
     global _compteur_id
     _compteur_id += 1
     return _compteur_id
+
+def _get_by_id(article_id: int) -> dict:
+    article = next((a for a in articles_db if a["id"] == article_id), None)
+    return article
+
+def _get_by_categorie(categorie: str) -> list[dict]:
+    return [a for a in articles_db if a["categorie"] == categorie]
+
+# ------------------------------------------------------------------------------------
 
 
 #  /articles/
@@ -41,11 +47,10 @@ def list_articles(
     # ------->   : str | None
     categorie: Optional[str] = None,
 ):
-    """Liste les articles avec pagination et filtre optionnel par catégorie."""
-    if categorie:
-        articles = [a for a in articles_db if a.get("categorie") == categorie]
+    """Liste les articles avec pagination et filtre optionnel par catégorie."""   
+    articles = articles_db if not categorie else _get_by_categorie(categorie)
     debut = (page - 1) * taille
-    return articles_db [debut : debut + taille] if not categorie else  articles[debut : debut + taille]
+    return articles[debut : debut + taille]
 
 # /articles/{article_id}
 # --------------------------> Schéma == Contrat != model au sens MVC !
@@ -53,10 +58,11 @@ def list_articles(
 @router.get("/{article_id}", response_model=ArticleResponse)
 # --------------------------------> contraintes de paramètre de chemin + documentation openapi
 def get_article(article_id: int = Path(gt=0, description="Identifiant entier positif de l'article")):
-    if article_id not in articles_db:
+    article = _get_by_id(article_id)
+    if not article:
         # redirige la réponse vers le gestionnaire d'exception ad hoc cf main.py
-        raise ArticleNonTrouveException(article_id=article_id)
-    return articles_db[article_id - 1]
+        raise ArticleNotFoundException(article_id=article_id)
+    return article
 
 # ----------------------------------------------> status
 @router.post(
@@ -86,13 +92,13 @@ def create_article(article: ArticleCreation):
         "date_creation": datetime.now()
 ,
     }
-    articles_db[nouvel_id] = nouvel_article
+    articles_db.append(nouvel_article)
     return nouvel_article
 
 # curl -X POST "http://127.0.0.1:8000/articles/" -H "Content-Type: application/json" -d '{"titre": "Nouvel article", "contenu": "Contenu de l article", "categorie": "python"}'
 
 @router.patch("/{article_id}", response_model=ArticleResponse)
-def update_article(article_id: int, article: ArticleMiseAJour):
+def update_article(article_id: int, article: ArticleUpdate):
     """Met à jour partiellement l'article (PATCH = modification partielle)."""
     if article_id not in articles_db:
         raise HTTPException(status_code=404, detail=f"Article {article_id} introuvable")
@@ -106,7 +112,7 @@ def update_article(article_id: int, article: ArticleMiseAJour):
 def delete_article(
     article_id: int = Path(gt=0),
     # une dépendance créé par l'utilisateur mais intégrée à FastAPI via Depends()
-    user: UtilisateurDansToken = Depends(get_current_user)
+    user: UserInToken = Depends(get_current_user)
 ):
     """Supprime l'article ou retourne 404."""
     print(user.username)

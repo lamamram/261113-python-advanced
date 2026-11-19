@@ -1,9 +1,10 @@
 from fastapi.security import OAuth2PasswordBearer, OAuth2PasswordRequestForm
-from passlib.context import CryptContext
+from pwdlib import PasswordHash
 from datetime import datetime, timedelta
 from typing import Optional
 from jose import JWTError, jwt
 from fastapi import Depends, HTTPException, status
+from exceptions import BadTokenException
 
 from dotenv import load_dotenv
 import os
@@ -13,22 +14,22 @@ from pydantic import BaseModel
 # charge le fichier .env.*
 load_dotenv()
 
+
 ### configuration d'un jeton JWT
 SECRET_KEY = os.getenv("SECRET_KEY")
 ALGORITHM = "HS256"
 EXPIRE_MINUTES = 30
 
-# Hachage des mots de passe avec bcrypt
-pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
+# Hachage des mots de passe avec pwdlib et argon2
+password_hash = PasswordHash.recommended()
 
-# # Schéma OAuth2 Password — l'URL du endpoint de login
-
+# Schéma OAuth2 Password — l'URL du endpoint de login dans OPENAPI
 oauth2_scheme = OAuth2PasswordBearer(tokenUrl="/auth/token")
 
 UTILISATEURS_DB = {
     "alice": {
         "username": "alice",
-        "hashed_password": pwd_context.hash("secret")
+        "hashed_password": password_hash.hash("secret")
     }
 }
 
@@ -38,7 +39,7 @@ class TokenReponse(BaseModel):
     access_token: str
     token_type: str
 
-class UtilisateurDansToken(BaseModel):
+class UserInToken(BaseModel):
     username: str
 
 # # ---------------------- helpers -----------
@@ -55,7 +56,7 @@ def creer_jeton(data: dict, expire_delta: Optional[timedelta] = None) -> str:
 # # ------------- gestion de mot de passe fake ------------------
 
 def verifier_mot_de_passe(plain: str, hashed: str) -> bool:
-    return pwd_context.verify(plain, hashed)
+    return password_hash.verify(plain, hashed)
 
 def authentifier_utilisateur(username: str, password: str) -> Optional[dict]:
     user = UTILISATEURS_DB.get(username)
@@ -68,24 +69,19 @@ def authentifier_utilisateur(username: str, password: str) -> Optional[dict]:
 
 # --- Dépendances d'authentification ---
 
-# --- la dépendance oauth2_scheme prelèe le token dans l'en-tête Authorization: "Bearer <token>"
-async def get_current_user(token: str = Depends(oauth2_scheme)) -> UtilisateurDansToken:
-    credentials_exception = HTTPException(
-        status_code=status.HTTP_401_UNAUTHORIZED,
-        detail="Jeton invalide ou expiré",
-        headers={"WWW-Authenticate": "Bearer"},
-    )
+# --- la dépendance oauth2_scheme prelèvee le token dans l'en-tête Authorization: "Bearer <token>"
+async def get_current_user(token: str = Depends(oauth2_scheme)) -> UserInToken:
     # décoder le token JWT pour extraire le username (sub)
     try:
         payload = jwt.decode(token, SECRET_KEY, algorithms=[ALGORITHM])
         username: str = payload.get("sub")
         if username is None:
-            raise credentials_exception
+            raise BadTokenException()
     except JWTError:
-        raise credentials_exception
+        raise BadTokenException()
 
     #le username du token existe ? user ou None
     user = UTILISATEURS_DB.get(username)
     if user is None:
-        raise credentials_exception
-    return UtilisateurDansToken(**user)
+        raise BadTokenException()
+    return UserInToken(**user)
