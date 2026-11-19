@@ -14,3 +14,4 @@ dns_*.csv
 data/
 *.ui
 Ui_*.py
+.env*
