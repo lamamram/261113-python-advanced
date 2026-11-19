@@ -246,6 +246,10 @@ p code, li code, td code { background: var(--code-bg); border: 1px solid var(--b
 </div>
 
 <div id="tab-le-systeme-de-dependances-de-fastapi" class="tab-content">
+<h3>Cycle de vie complet de FastAPI</h3>
+
+<p><img src="../08-images/lifecycle.svg" alt="Cycle de vie complet de FastAPI" /></p>
+
 <h3>Principe de l'injection de dépendances</h3>
 <p>L'injection de dépendances (Dependency Injection, DI) est un patron de conception dans lequel un composant reçoit ses dépendances de l'extérieur plutôt que de les instancier lui-même. FastAPI fournit un système de DI déclaratif : une fonction peut déclarer qu'elle "dépend" d'une autre fonction, et FastAPI s'occupe d'appeler la dépendance avant d'appeler le gestionnaire, en lui passant le résultat.</p>
 <div class="code-block"><pre><code class="language-python">from fastapi import Depends, FastAPI
@@ -281,7 +285,7 @@ def get_current_user(token: str = Depends(get_token)) -&gt; dict:
 
 # Dépendance de haut niveau — vérifier que l'utilisateur est admin
 def require_admin(user: dict = Depends(get_current_user)) -&gt; dict:
-    if not user.get(&quot;est_admin&quot;):
+    if not user.get(&quot;is_admin&quot;):
         raise HTTPException(status_code=403, detail=&quot;Accès réservé aux administrateurs&quot;)
     return user
 
@@ -341,7 +345,7 @@ SflKxwRJSMeKKF2QT4fwpMeJf36POk6yJV_adQssw5c
 <p>La propriété clé : le serveur peut <strong>vérifier</strong> un JWT sans l'avoir stocké (stateless). Il suffit de re-calculer la signature avec la clé secrète et de comparer. Si elle correspond et si le jeton n'est pas expiré, le jeton est valide.</p>
 <div class="callout warn"><div class="callout-title">Ne jamais stocker de données sensibles dans le payload JWT</div><p>Le payload d'un JWT est <strong>encodé</strong> en Base64, pas chiffré — n'importe qui peut le décoder sans la clé secrète. Ne jamais y mettre de mot de passe, de clé privée ou de données personnelles sensibles. Le payload sert à transporter des identifiants et des droits, pas des secrets.</p></div>
 <h3>Implémentation complète — OAuth2 Password Flow avec JWT</h3>
-<div class="code-block"><pre><code class="language-bash">pip install &quot;python-jose[cryptography]&quot; &quot;passlib[bcrypt]&quot;
+<div class="code-block"><pre><code class="language-bash">pip install &quot;python-jose[cryptography]&quot; &quot;pwdlib[argon2]&quot;
 </code></pre><button class="copy-btn" onclick="copyCode(this)">Copier</button></div>
 <div class="code-block"><pre><code class="language-python"># auth.py — module d'authentification complet
 from datetime import datetime, timedelta
@@ -350,7 +354,7 @@ from typing import Optional
 from fastapi import Depends, HTTPException, status
 from fastapi.security import OAuth2PasswordBearer, OAuth2PasswordRequestForm
 from jose import JWTError, jwt
-from passlib.context import CryptContext
+from pwdlib import PasswordHash
 from pydantic import BaseModel
 
 # Configuration — en production, charger depuis les variables d'environnement
@@ -359,7 +363,7 @@ ALGORITHM = &quot;HS256&quot;
 EXPIRE_MINUTES = 30
 
 # Hachage des mots de passe avec bcrypt
-pwd_context = CryptContext(schemes=[&quot;bcrypt&quot;], deprecated=&quot;auto&quot;)
+password_hash = PasswordHash.recommended()
 
 # Schéma OAuth2 Password — l'URL du endpoint de login
 oauth2_scheme = OAuth2PasswordBearer(tokenUrl=&quot;/auth/token&quot;)
@@ -371,9 +375,9 @@ class TokenReponse(BaseModel):
     access_token: str
     token_type: str
 
-class UtilisateurDansToken(BaseModel):
+class UserInToken(BaseModel):
     username: str
-    est_admin: bool = False
+    is_admin: bool = False
 
 
 # --- Base de données simulée (remplacée par SQLAlchemy au Chapitre 5) ---
@@ -381,13 +385,13 @@ class UtilisateurDansToken(BaseModel):
 UTILISATEURS_DB = {
     &quot;alice&quot;: {
         &quot;username&quot;: &quot;alice&quot;,
-        &quot;hashed_password&quot;: pwd_context.hash(&quot;secret&quot;),
-        &quot;est_admin&quot;: False,
+        &quot;hashed_password&quot;: password_hash.hash(&quot;secret&quot;),
+        &quot;is_admin&quot;: False,
     },
     &quot;bob&quot;: {
         &quot;username&quot;: &quot;bob&quot;,
-        &quot;hashed_password&quot;: pwd_context.hash(&quot;admin123&quot;),
-        &quot;est_admin&quot;: True,
+        &quot;hashed_password&quot;: password_hash.hash(&quot;admin123&quot;),
+        &quot;is_admin&quot;: True,
     },
 }
 
@@ -395,7 +399,7 @@ UTILISATEURS_DB = {
 # --- Fonctions utilitaires ---
 
 def verifier_mot_de_passe(plain: str, hashed: str) -&gt; bool:
-    return pwd_context.verify(plain, hashed)
+    return password_hash.verify(plain, hashed)
 
 def creer_jeton(data: dict, expire_delta: Optional[timedelta] = None) -&gt; str:
     payload = data.copy()
@@ -412,7 +416,7 @@ def authentifier_utilisateur(username: str, password: str) -&gt; Optional[dict]:
 
 # --- Dépendances d'authentification ---
 
-async def get_current_user(token: str = Depends(oauth2_scheme)) -&gt; UtilisateurDansToken:
+async def get_current_user(token: str = Depends(oauth2_scheme)) -&gt; UserInToken:
     credentials_exception = HTTPException(
         status_code=status.HTTP_401_UNAUTHORIZED,
         detail=&quot;Jeton invalide ou expiré&quot;,
@@ -429,13 +433,13 @@ async def get_current_user(token: str = Depends(oauth2_scheme)) -&gt; Utilisateu
     user = UTILISATEURS_DB.get(username)
     if user is None:
         raise credentials_exception
-    return UtilisateurDansToken(**user)
+    return UserInToken(**user)
 
 
 async def require_admin(
-    current_user: UtilisateurDansToken = Depends(get_current_user),
-) -&gt; UtilisateurDansToken:
-    if not current_user.est_admin:
+    current_user: UserInToken = Depends(get_current_user),
+) -&gt; UserInToken:
+    if not current_user.is_admin:
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
             detail=&quot;Droits administrateur requis&quot;,
@@ -462,17 +466,17 @@ async def login(form_data: OAuth2PasswordRequestForm = Depends()):
     return {&quot;access_token&quot;: token, &quot;token_type&quot;: &quot;bearer&quot;}
 </code></pre><button class="copy-btn" onclick="copyCode(this)">Copier</button></div>
 <div class="code-block"><pre><code class="language-python"># Utilisation dans un routeur protégé
-from auth import get_current_user, require_admin, UtilisateurDansToken
+from auth import get_current_user, require_admin, UserInToken
 
-@router.get(&quot;/profil&quot;, response_model=UtilisateurDansToken)
-async def get_profil(user: UtilisateurDansToken = Depends(get_current_user)):
+@router.get(&quot;/profil&quot;, response_model=UserInToken)
+async def get_profil(user: UserInToken = Depends(get_current_user)):
     &quot;&quot;&quot;Route protégée — nécessite un jeton valide.&quot;&quot;&quot;
     return user
 
 @router.delete(&quot;/articles/{id}&quot;, status_code=204)
 async def delete_article(
     article_id: int,
-    admin: UtilisateurDansToken = Depends(require_admin),
+    admin: UserInToken = Depends(require_admin),
 ):
     &quot;&quot;&quot;Route protégée — nécessite un jeton admin.&quot;&quot;&quot;
     ...
@@ -537,7 +541,7 @@ def envoyer_email_confirmation(destinataire: str, titre_article: str):
 async def create_article(
     article: ArticleCreation,
     background_tasks: BackgroundTasks,
-    user: UtilisateurDansToken = Depends(get_current_user),
+    user: UserInToken = Depends(get_current_user),
 ):
     # 1. Créer l'article
     nouvel_article = {&quot;id&quot;: 1, **article.model_dump()}
@@ -655,10 +659,10 @@ pytest tests/ --cov=. --cov-report=term-missing
 <p>Le schéma ci-dessus illustre le flux de test : <code>TestClient</code> appelle directement l'application FastAPI en mémoire (sans port TCP), les dépendances sont résolues normalement, la réponse est retournée synchroniquement à <code>pytest</code>. Des fixtures peuvent remplacer certaines dépendances par des mocks via <code>app.dependency_overrides</code>.</p>
 <h3>Remplacer des dépendances dans les tests</h3>
 <div class="code-block"><pre><code class="language-python"># Remplacer la dépendance d'authentification par un utilisateur de test
-from auth import get_current_user, UtilisateurDansToken
+from auth import get_current_user, UserInToken
 
 def override_get_current_user():
-    return UtilisateurDansToken(username=&quot;alice_test&quot;, est_admin=False)
+    return UserInToken(username=&quot;alice_test&quot;, is_admin=False)
 
 app.dependency_overrides[get_current_user] = override_get_current_user
 
@@ -770,7 +774,7 @@ token = jwt.encode(payload, settings.secret_key, algorithm=settings.algorithm)
 <p>Reprenez l'API de tâches du Chapitre 2 et ajoutez une couche d'authentification JWT complète.</p>
 <p><strong>Travail à réaliser :</strong></p>
 <ol>
-<li>Installez <code>python-jose[cryptography]</code>, <code>passlib[bcrypt]</code> et <code>pydantic-settings</code></li>
+<li>Installez <code>python-jose[cryptography]</code>, <code>pwdlib[argon2]</code> et <code>pydantic-settings</code></li>
 <li>Créez un module <code>auth.py</code> avec :</li>
 <li>Deux utilisateurs en mémoire (<code>alice</code>/<code>secret</code> non-admin, <code>bob</code>/<code>admin123</code> admin)</li>
 <li>Un endpoint <code>POST /auth/token</code> retournant un JWT</li>
@@ -791,7 +795,7 @@ token = jwt.encode(payload, settings.secret_key, algorithm=settings.algorithm)
 <li>Swagger UI affiche le bouton <strong>Authorize</strong> et permet de s'authentifier</li>
 </ul>
 <details class="aide"><summary>Aide — pas à pas guidé</summary><div class="aide-body"><p><strong>Étape 1 — Installer les dépendances</strong></p>
-<div class="code-block"><pre><code class="language-bash">pip install &quot;python-jose[cryptography]&quot; &quot;passlib[bcrypt]&quot; &quot;pydantic-settings&quot;
+<div class="code-block"><pre><code class="language-bash">pip install &quot;python-jose[cryptography]&quot; &quot;pwdlib[argon2]&quot; &quot;pydantic-settings&quot;
 pip freeze &gt; requirements.txt
 </code></pre><button class="copy-btn" onclick="copyCode(this)">Copier</button></div>
 <p><strong>Étape 2 — Créer <code>auth.py</code></strong></p>
@@ -801,32 +805,32 @@ from typing import Optional
 from fastapi import Depends, HTTPException, status
 from fastapi.security import OAuth2PasswordBearer, OAuth2PasswordRequestForm
 from jose import JWTError, jwt
-from passlib.context import CryptContext
+from pwdlib import PasswordHash
 from pydantic import BaseModel
 
 SECRET_KEY = &quot;formation-dawan-clé-de-développement-seulement&quot;
 ALGORITHM = &quot;HS256&quot;
 EXPIRE_MINUTES = 30
 
-pwd_context = CryptContext(schemes=[&quot;bcrypt&quot;], deprecated=&quot;auto&quot;)
+password_hash = PasswordHash.recommended()
 oauth2_scheme = OAuth2PasswordBearer(tokenUrl=&quot;/auth/token&quot;)
 
 class TokenReponse(BaseModel):
     access_token: str
     token_type: str
 
-class UtilisateurDansToken(BaseModel):
+class UserInToken(BaseModel):
     username: str
-    est_admin: bool = False
+    is_admin: bool = False
 
 UTILISATEURS_DB = {
-    &quot;alice&quot;: {&quot;username&quot;: &quot;alice&quot;, &quot;hashed_password&quot;: pwd_context.hash(&quot;secret&quot;), &quot;est_admin&quot;: False},
-    &quot;bob&quot;:   {&quot;username&quot;: &quot;bob&quot;,   &quot;hashed_password&quot;: pwd_context.hash(&quot;admin123&quot;), &quot;est_admin&quot;: True},
+    &quot;alice&quot;: {&quot;username&quot;: &quot;alice&quot;, &quot;hashed_password&quot;: password_hash.hash(&quot;secret&quot;), &quot;is_admin&quot;: False},
+    &quot;bob&quot;:   {&quot;username&quot;: &quot;bob&quot;,   &quot;hashed_password&quot;: password_hash.hash(&quot;admin123&quot;), &quot;is_admin&quot;: True},
 }
 
 def authentifier(username: str, password: str) -&gt; Optional[dict]:
     user = UTILISATEURS_DB.get(username)
-    if not user or not pwd_context.verify(password, user[&quot;hashed_password&quot;]):
+    if not user or not password_hash.verify(password, user[&quot;hashed_password&quot;]):
         return None
     return user
 
@@ -835,7 +839,7 @@ def creer_jeton(data: dict) -&gt; str:
     payload[&quot;exp&quot;] = datetime.utcnow() + timedelta(minutes=EXPIRE_MINUTES)
     return jwt.encode(payload, SECRET_KEY, algorithm=ALGORITHM)
 
-async def get_current_user(token: str = Depends(oauth2_scheme)) -&gt; UtilisateurDansToken:
+async def get_current_user(token: str = Depends(oauth2_scheme)) -&gt; UserInToken:
     exc = HTTPException(status_code=401, detail=&quot;Jeton invalide&quot;,
                         headers={&quot;WWW-Authenticate&quot;: &quot;Bearer&quot;})
     try:
@@ -848,10 +852,10 @@ async def get_current_user(token: str = Depends(oauth2_scheme)) -&gt; Utilisateu
     user = UTILISATEURS_DB.get(username)
     if not user:
         raise exc
-    return UtilisateurDansToken(**user)
+    return UserInToken(**user)
 
-async def require_admin(user: UtilisateurDansToken = Depends(get_current_user)) -&gt; UtilisateurDansToken:
-    if not user.est_admin:
+async def require_admin(user: UserInToken = Depends(get_current_user)) -&gt; UserInToken:
+    if not user.is_admin:
         raise HTTPException(status_code=403, detail=&quot;Droits admin requis&quot;)
     return user
 </code></pre><button class="copy-btn" onclick="copyCode(this)">Copier</button></div>
@@ -873,18 +877,18 @@ async def login(form_data: OAuth2PasswordRequestForm = Depends()):
 </code></pre><button class="copy-btn" onclick="copyCode(this)">Copier</button></div>
 <p><strong>Étape 4 — Protéger les routes de tâches</strong></p>
 <p>Dans <code>routers/taches.py</code>, importez les dépendances et ajoutez-les :</p>
-<div class="code-block"><pre><code class="language-python">from auth import get_current_user, require_admin, UtilisateurDansToken
+<div class="code-block"><pre><code class="language-python">from auth import get_current_user, require_admin, UserInToken
 
 @router.get(&quot;/&quot;, response_model=List[TacheReponse])
-def list_taches(..., user: UtilisateurDansToken = Depends(get_current_user)):
+def list_taches(..., user: UserInToken = Depends(get_current_user)):
     ...
 
 @router.post(&quot;/&quot;, response_model=TacheReponse, status_code=201)
-def create_tache(tache: TacheCreation, user: UtilisateurDansToken = Depends(get_current_user)):
+def create_tache(tache: TacheCreation, user: UserInToken = Depends(get_current_user)):
     ...
 
 @router.delete(&quot;/{tache_id}&quot;, status_code=204)
-def delete_tache(tache_id: int, admin: UtilisateurDansToken = Depends(require_admin)):
+def delete_tache(tache_id: int, admin: UserInToken = Depends(require_admin)):
     ...
 </code></pre><button class="copy-btn" onclick="copyCode(this)">Copier</button></div>
 <p><strong>Étape 5 — Inclure le routeur dans <code>main.py</code></strong></p>
@@ -928,7 +932,7 @@ app.include_router(taches.router)
 <div class="code-block"><pre><code class="language-python">import pytest
 from fastapi.testclient import TestClient
 from main import app
-from auth import get_current_user, UtilisateurDansToken
+from auth import get_current_user, UserInToken
 
 @pytest.fixture
 def client():
