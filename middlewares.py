@@ -12,3 +12,13 @@ def install_middlewares(app: FastAPI):
         duree = time.perf_counter() - debut
         response.headers["X-Process-Time"] = f"{duree:.4f}s"
         return response
+
+    # @app.middleware("http")
+    # async def middlewareB: ...
+
+    ## en exécution
+    ## entrée de middleware A
+    ## entrée de middleware B
+    ## réponse du gestionnaire
+    ## sortie de middleware B
+    ## sortie de middleware A

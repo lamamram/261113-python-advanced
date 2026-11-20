@@ -1,15 +1,19 @@
-from pydantic import BaseModel, Field, field_validator, model_validator
+from pydantic import BaseModel as BaseSchema, Field, field_validator, model_validator
 from datetime import datetime
 from typing import Optional, List
 import re
 
-class ArticleFormatMixin(BaseModel):
+class ArticleFormatMixin(BaseSchema):
     """
     Mixin pour formater les tags en minuscules et sans espaces superflus.
 
     check_fields=False permet de valider même si le champ n'est pas défini dans le modèle.
     """
-    @field_validator("tags", check_fields=False)
+    @field_validator(
+            "tags", 
+            check_fields=False, 
+            # mode="before"
+    )
     @classmethod
     def tags_en_minuscules(cls, v: list[str]) -> list[str]:
         """ transformation impossible avec un champs composite depuis Field !!! """
@@ -25,7 +29,7 @@ class ArticleResponse(ArticleFormatMixin):
     categorie: Optional[str] = None
     nb_vues: int = Field(default=0, ge=0)
     # liste de tags possiblemement vide par défaut
-    tags: List[TagSchema] = Field(default_factory=list)
+    tags: List["TagSchema"] = Field(default_factory=list)
 
 
 
@@ -53,7 +57,7 @@ class ArticleUpdate(ArticleFormatMixin):
     categorie: Optional[str] = None
     tags: Optional[List[TagSchema]] = None
 
-class TagSchema(BaseModel):
+class TagSchema(BaseSchema):
     id: int
     nom: str
 

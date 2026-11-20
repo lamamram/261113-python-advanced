@@ -24,7 +24,7 @@ EXPIRE_MINUTES = 30
 password_hash = PasswordHash.recommended()
 
 # Schéma OAuth2 Password — l'URL du endpoint de login dans OPENAPI
-oauth2_scheme = OAuth2PasswordBearer(tokenUrl="/auth/token")
+oauth2_scheme = OAuth2PasswordBearer(tokenUrl="/v1/auth/token")
 
 UTILISATEURS_DB = {
     "alice": {
