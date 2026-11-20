@@ -10,7 +10,7 @@ from auth import UserInToken, get_current_user
 ################ ORM #############
 from database import Session as DbSession, get_db
 from models import Article
-from sqlalchemy import select
+from sqlalchemy import select, update
 
 # ------------------------------------> tags qui servent à tout
 router = APIRouter(prefix="/articles", tags=["Articles"])
@@ -107,47 +107,77 @@ La date de création est définie au moment de la requête.
         409: {"description": "Un article avec ce titre existe déjà"},
     },
 )
-def create_article(article: ArticleCreation):
+def create_article(article: ArticleCreation, db: DbSession = Depends(get_db)):
     """Crée un nouvel article et retourne l'article créé avec son ID."""
-    nouvel_id = _nouvel_id()
-    nouvel_article = {
-        "id": nouvel_id,
-        # injecter les champs de la requête POST dûment validés par le schéma Pydantic en paramètre du handler
-        **article.model_dump(),
-        "publie": False,
-        "date_creation": datetime.now()
-,
-    }
-    articles_db.append(nouvel_article)
+#     nouvel_id = _nouvel_id()
+#     nouvel_article = {
+#         "id": nouvel_id,
+#         # injecter les champs de la requête POST dûment validés par le schéma Pydantic en paramètre du handler
+#         **article.model_dump(),
+#         "publie": False,
+#         "date_creation": datetime.now()
+# ,
+#     }
+#     articles_db.append(nouvel_article)
+    nouvel_article = Article(**article.model_dump())
+    db.add(nouvel_article) # marquer en insertion: calcule les ids et defaults n'ajoute pas à l'objet
+    
+    
+    # db.flush() # les ids sont accessibles dans l'objet et dans la session pour continuer le code métier
+    
+    
+    
+    db.commit()
     return nouvel_article
 
-# curl -X POST "http://127.0.0.1:8000/articles/" -H "Content-Type: application/json" -d '{"titre": "Nouvel article", "contenu": "Contenu de l article", "categorie": "python"}'
+# curl -X POST "http://127.0.0.1:8000/v1/articles/" -H "Content-Type: application/json" -d '{"titre": "Nouvel article", "contenu": "content:Contenu de l article", "publie": false}'
 
 @router.patch("/{article_id}", response_model=ArticleResponse)
-def update_article(article_id: int, article: ArticleUpdate):
+def update_article(article_id: int, article_update: ArticleUpdate, db: DbSession = Depends(get_db)):
     """Met à jour partiellement l'article (PATCH = modification partielle)."""
-    if article_id not in articles_db:
+    
+    this_article = db.get(Article, article_id)
+    if not this_article:
         raise HTTPException(status_code=404, detail=f"Article {article_id} introuvable")
     # ------------------------------> élaguer les champs inutilisés (None) avant la mise à jour
-    mises_a_jour = article.model_dump(exclude_none=True)  # Ignore les champs None
-    articles_db[article_id].update(mises_a_jour)
-    return articles_db[article_id]
+    updates = article_update.model_dump(exclude_none=True)  # Ignore les champs None
+    # articles_db[article_id].update(mises_a_jour)
+    
+    # version orm
+    # for field, value in updates.items():
+    #     setattr(this_article, field, value)
+    # db.commit()
+   
+    # version core: pour update massifs !!
+    # --------------------> WHERE du pauvre, -----> SET key=value
+    stmt = update(Article).filter_by(id=article_id).values(updates)
+    db.execute(stmt)
+    db.commit()
+    db.refresh(this_article) # annule les modifications en écrasant la version de la db
+    # flush : cofirmer les changement côté python
+
+    return this_article
 
 
 @router.delete("/{article_id}", status_code=204)
 def delete_article(
     article_id: int = Path(gt=0),
     # une dépendance créé par l'utilisateur mais intégrée à FastAPI via Depends()
-    user: UserInToken = Depends(get_current_user)
+    user: UserInToken = Depends(get_current_user),
+    db: DbSession = Depends(get_db)
 ):
     """Supprime l'article ou retourne 404."""
-    print(user.username)
-    articles = list(filter(lambda d: d["id"] == article_id, articles_db))
-    if not articles:
+    # print(user.username)
+    # articles = list(filter(lambda d: d["id"] == article_id, articles_db))
+    this_article = db.get(Article, article_id)
+    
+    if not this_article:
         raise HTTPException(status_code=404, detail=f"Article {article_id} introuvable")
-    for i in range(len(articles_db)):
-        if articles[0]["id"] == articles_db[i]["id"]:
-            del articles_db[i]
-            break
+    # for i in range(len(articles_db)):
+    #     if articles[0]["id"] == articles_db[i]["id"]:
+    #         del articles_db[i]
+    #         break
+    db.delete(this_article) # marque comme suppression
+    db.commit()
 
 # curl -X DELETE "http://127.0.0.1:8000/articles/1" -H "Authorization: Bearer <token>"
