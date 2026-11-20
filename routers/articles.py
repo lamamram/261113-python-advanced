@@ -55,15 +55,13 @@ def list_articles(
     db: DbSession = Depends(get_db)
 ):
     """Liste les articles avec pagination et filtre optionnel par catégorie."""   
-    # articles = articles_db if not categorie else _get_by_categorie(categorie)
     debut = (page - 1) * taille
-    # return articles[debut : debut + taille]
     stmt = select(Article)
     if publie:
         stmt = stmt.where(Article.publie == True)
     # ------------------->Result-> Results[Article] -> List[Articles] 
     # ---------- req réutilisable après ---
-    # ---------------------------------- données ------
+    # ------------------------------------ données ------
     # articles = db.execute(stmt).scalars().all()
 
     # les données directement
@@ -109,23 +107,11 @@ La date de création est définie au moment de la requête.
 )
 def create_article(article: ArticleCreation, db: DbSession = Depends(get_db)):
     """Crée un nouvel article et retourne l'article créé avec son ID."""
-#     nouvel_id = _nouvel_id()
-#     nouvel_article = {
-#         "id": nouvel_id,
-#         # injecter les champs de la requête POST dûment validés par le schéma Pydantic en paramètre du handler
-#         **article.model_dump(),
-#         "publie": False,
-#         "date_creation": datetime.now()
-# ,
-#     }
-#     articles_db.append(nouvel_article)
+
     nouvel_article = Article(**article.model_dump())
-    db.add(nouvel_article) # marquer en insertion: calcule les ids et defaults n'ajoute pas à l'objet
+    db.add(nouvel_article) # marquer en insertion: calcule les ids et defaults mais ne les ajoute pas à l'objet !!!
     
-    
-    # db.flush() # les ids sont accessibles dans l'objet et dans la session pour continuer le code métier
-    
-    
+    # db.flush() # ici les ids sont accessibles dans l'objet et dans la session pour continuer le code métier comme si on avait commité !!!    
     
     db.commit()
     return nouvel_article
@@ -141,9 +127,8 @@ def update_article(article_id: int, article_update: ArticleUpdate, db: DbSession
         raise HTTPException(status_code=404, detail=f"Article {article_id} introuvable")
     # ------------------------------> élaguer les champs inutilisés (None) avant la mise à jour
     updates = article_update.model_dump(exclude_none=True)  # Ignore les champs None
-    # articles_db[article_id].update(mises_a_jour)
     
-    # version orm
+    # version orm : pour un objet + simple
     # for field, value in updates.items():
     #     setattr(this_article, field, value)
     # db.commit()
@@ -153,8 +138,8 @@ def update_article(article_id: int, article_update: ArticleUpdate, db: DbSession
     stmt = update(Article).filter_by(id=article_id).values(updates)
     db.execute(stmt)
     db.commit()
-    db.refresh(this_article) # annule les modifications en écrasant la version de la db
-    # flush : cofirmer les changement côté python
+    db.refresh(this_article) # annule les modifications d'objets python en écrasant la version de la db
+    # flush : confirmer les changement côté python
 
     return this_article
 
@@ -167,17 +152,11 @@ def delete_article(
     db: DbSession = Depends(get_db)
 ):
     """Supprime l'article ou retourne 404."""
-    # print(user.username)
-    # articles = list(filter(lambda d: d["id"] == article_id, articles_db))
     this_article = db.get(Article, article_id)
     
     if not this_article:
         raise HTTPException(status_code=404, detail=f"Article {article_id} introuvable")
-    # for i in range(len(articles_db)):
-    #     if articles[0]["id"] == articles_db[i]["id"]:
-    #         del articles_db[i]
-    #         break
     db.delete(this_article) # marque comme suppression
     db.commit()
 
-# curl -X DELETE "http://127.0.0.1:8000/articles/1" -H "Authorization: Bearer <token>"
+# curl -X DELETE "http://127.0.0.1:8000/v1/articles/1" -H "Authorization: Bearer <token>"
