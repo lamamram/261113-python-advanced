@@ -1,10 +1,10 @@
 from sqlalchemy import create_engine, Integer, String, Boolean, DateTime, Text, ForeignKey, Table, Column, func
-from sqlalchemy.orm import sessionmaker, DeclarativeBase, Mapped, mapped_column, relationship
+from sqlalchemy.orm import Session, sessionmaker, DeclarativeBase, Mapped, mapped_column, relationship
 # pip install python-dotenv
 from dotenv import load_dotenv
 import os
 from datetime import datetime
-from typing import List
+from typing import List, Generator
 
 load_dotenv()  # charge les variables d'environnement depuis le fichier .env
 
@@ -33,7 +33,7 @@ SessionLocal = sessionmaker(
 )
 
 
-def get_db():
+def get_db() -> Generator[Session, None, None]:
     """
     1. Fournit une session de base de données SQLAlchemy pour chaque requête FastAPI.
     en utilisant le mécanisme Depends(get_db) pour rendre la session dispo dans les gestionnaires fastAPI

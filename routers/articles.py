@@ -4,6 +4,9 @@ from typing import Optional, List
 from schemas.articles import ArticleResponse, ArticleCreation, ArticleUpdate
 from datetime import datetime
 from exceptions import ArticleNotFoundException
+# ------------------> il y a déjà une classe Session dans Fastapi
+from database import Session as DbSession, get_db
+from models import Article
 from auth import UserInToken, get_current_user
 
 # ------------------------------------> tags qui servent à tout
@@ -57,11 +60,16 @@ def list_articles(
 # -----------------------------------------> contrôle la réponse FastAPI
 @router.get("/{article_id}", response_model=ArticleResponse)
 # --------------------------------> contraintes de paramètre de chemin + documentation openapi
-def get_article(article_id: int = Path(gt=0, description="Identifiant entier positif de l'article")):
-    article = _get_by_id(article_id)
+def get_article(
+    article_id: int = Path(gt=0, description="Identifiant entier positif de l'article"),
+    db: DbSession = Depends(get_db)
+):
+    article = db.get(Article, article_id)
     if not article:
         # redirige la réponse vers le gestionnaire d'exception ad hoc cf main.py
         raise ArticleNotFoundException(article_id=article_id)
+    article.date_creation = article.created_at
+    del article.created_at
     return article
 
 # ----------------------------------------------> status
