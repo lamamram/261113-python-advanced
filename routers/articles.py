@@ -9,6 +9,7 @@ from auth import UserInToken, get_current_user
 
 ################ ORM #############
 from database import Session as DbSession, get_db
+from async_database import AsyncSession as AsyncDbSession, get_async_db
 from models import Article
 from sqlalchemy import select, update
 
@@ -46,6 +47,27 @@ def _get_by_categorie(categorie: str) -> list[dict]:
 
 
 #  /articles/
+@router.get("/async", response_model=List[ArticleResponse])
+async def list_articles(
+    page: int = Query(default=1, ge=1, description="Numéro de page (commence à 1)"),
+    taille: int = 10,
+    # ------->   : str | None
+    publie: Optional[str] = None,
+    db: AsyncDbSession = Depends(get_async_db)
+):
+    """Liste les articles avec pagination et filtre optionnel par catégorie."""   
+    debut = (page - 1) * taille
+    stmt = select(Article)
+    if publie:
+        stmt = stmt.where(Article.publie == True)
+
+    # uniquement execute qui retourne ici une coroutine ==> Awaitable !!
+    articles = await db.execute(stmt)
+    articles = articles.scalars().all()
+
+    return articles
+
+#  /articles/
 @router.get("/", response_model=List[ArticleResponse])
 def list_articles(
     page: int = Query(default=1, ge=1, description="Numéro de page (commence à 1)"),
@@ -64,7 +86,7 @@ def list_articles(
     # ------------------------------------ données ------
     # articles = db.execute(stmt).scalars().all()
 
-    # les données directement
+    # les données directement : synchrone
     articles = db.scalars(
         stmt
         .limit(debut + taille)
