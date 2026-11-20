@@ -69,8 +69,6 @@ def get_article(
     if not article:
         # redirige la réponse vers le gestionnaire d'exception ad hoc cf exceptions.py
         raise ArticleNotFoundException(article_id=article_id)
-    article.date_creation = article.created_at
-    del article.created_at
     return article
 
 # ----------------------------------------------> status
