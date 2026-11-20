@@ -1,4 +1,4 @@
-from sqlalchemy import Integer, String, Boolean, DateTime, Text, ForeignKey, Table, Column, func
+from sqlalchemy import Integer, String, Boolean, DateTime, Text, ForeignKey, Table, CHAR, Column, func
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 from database import Base
 from pwdlib import PasswordHash
