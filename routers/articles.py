@@ -5,9 +5,12 @@ from schemas.articles import ArticleResponse, ArticleCreation, ArticleUpdate
 from datetime import datetime
 from exceptions import ArticleNotFoundException
 # ------------------> il y a déjà une classe Session dans Fastapi
+from auth import UserInToken, get_current_user
+
+################ ORM #############
 from database import Session as DbSession, get_db
 from models import Article
-from auth import UserInToken, get_current_user
+from sqlalchemy import select
 
 # ------------------------------------> tags qui servent à tout
 router = APIRouter(prefix="/articles", tags=["Articles"])
@@ -48,12 +51,28 @@ def list_articles(
     page: int = Query(default=1, ge=1, description="Numéro de page (commence à 1)"),
     taille: int = 10,
     # ------->   : str | None
-    categorie: Optional[str] = None,
+    publie: Optional[str] = None,
+    db: DbSession = Depends(get_db)
 ):
     """Liste les articles avec pagination et filtre optionnel par catégorie."""   
-    articles = articles_db if not categorie else _get_by_categorie(categorie)
+    # articles = articles_db if not categorie else _get_by_categorie(categorie)
     debut = (page - 1) * taille
-    return articles[debut : debut + taille]
+    # return articles[debut : debut + taille]
+    stmt = select(Article)
+    if publie:
+        stmt = stmt.where(Article.publie == True)
+    # ------------------->Result-> Results[Article] -> List[Articles] 
+    # ---------- req réutilisable après ---
+    # ---------------------------------- données ------
+    # articles = db.execute(stmt).scalars().all()
+
+    # les données directement
+    articles = db.scalars(
+        stmt
+        .limit(debut + taille)
+        .offset(debut)
+    ).all()
+    return articles
 
 # /articles/{article_id}
 # --------------------------> Schéma == Contrat != model au sens MVC !
