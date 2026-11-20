@@ -39,7 +39,7 @@ def init_db():
             hashed_password="roottoor"
         )
         user_normal.hash_password()
-        # add et add_all() génèrent les requêtes INSERT mais ne valident pas encore la transaction
+        # add et add_all() génèrent les valeurs des INSERT mais ne valident pas encore la transaction
         session.add_all([user_admin, user_normal])
         # print(user_normal)
         
@@ -73,6 +73,8 @@ def init_db():
 
         print("insertion des profiles...")
         # plus optimisé
+        #---------------------> expressions table / expression champs : permettent d'inférer le FROM / INTO
+        # session.execute(insert(ProfilUtilisateur.bio, ProfilUtilisateur.utilisateur_id).values([
         session.execute(insert(ProfilUtilisateur).values([
             {"bio": "Je suis l'administrateur du site.", "utilisateur_id": user_admin.id},
             {"bio": "Je suis un utilisateur normal.", "utilisateur_id": user_normal.id}
@@ -111,8 +113,9 @@ def init_db():
         else:
             print("Utilisateur admin non trouvé.")
         
-        # requête SELECT COUNT(1) pour vérifier le nombre d'articles insérés
-        stmt_count = select(func.count()).select_from(Article)
+        # requête SELECT COUNT(1) AS count pour vérifier le nombre d'articles insérés
+        # si un select n'informe pas sur le FROM => il faut ajouter cette info avc select_from()
+        stmt_count = select(func.count().label("count")).select_from(Article)
         article_count = session.execute(stmt_count).scalar_one()
         print(f"Nombre d'articles insérés : {article_count}")
 
