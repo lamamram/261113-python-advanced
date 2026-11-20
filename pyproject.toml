@@ -11,6 +11,10 @@ dependencies = [
     "python-jose[cryptography]>=3.5.0",
 ]
 
+[tool.fastapi]
+# valeurs par défaut pour FastAPI
+entrypoint = "main:app"
+
 [dependency-groups]
 dev = [
     "pytest>=9.2.0",
