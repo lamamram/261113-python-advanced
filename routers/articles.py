@@ -64,9 +64,10 @@ def get_article(
     article_id: int = Path(gt=0, description="Identifiant entier positif de l'article"),
     db: DbSession = Depends(get_db)
 ):
+    #------------> vérifie si l'objet est dans le cache mémoire (identity map) avant de demander à la base
     article = db.get(Article, article_id)
     if not article:
-        # redirige la réponse vers le gestionnaire d'exception ad hoc cf main.py
+        # redirige la réponse vers le gestionnaire d'exception ad hoc cf exceptions.py
         raise ArticleNotFoundException(article_id=article_id)
     article.date_creation = article.created_at
     del article.created_at
